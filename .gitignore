@@ -1,0 +1,23 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# Built binaries (use cargo build to regenerate)
+/bpf-rbac
+/bpf-rbacd
+*.d
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+*.log
+/test-output/

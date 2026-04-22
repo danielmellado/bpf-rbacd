@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Run daily at 4:00 UTC
+    - cron: "0 4 * * *"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, beta]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build --all-targets
+
+      - name: Build release
+        run: cargo build --release
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run unit tests
+        run: cargo test --lib
+
+      - name: Run doc tests
+        run: cargo test --doc
+
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build release binaries
+        run: cargo build --release
+
+      - name: Create ebpf group
+        run: sudo groupadd ebpf || true
+
+      - name: Run integration tests
+        run: |
+          # Create test users
+          sudo useradd -m -G ebpf test_allowed || true
+          sudo useradd -m test_denied || true
+
+          # Start daemon
+          sudo ./target/release/bpf-rbacd &
+          sleep 2
+
+          # Test: allowed user can create map
+          echo "Testing allowed user..."
+          OUTPUT=$(sudo -u test_allowed ./target/release/bpf-rbac create-map hash test1 4 8 100 2>&1) || true
+          if echo "$OUTPUT" | grep -q "Success"; then
+            echo "✓ Allowed user test passed"
+          else
+            echo "✗ Allowed user test failed: $OUTPUT"
+            exit 1
+          fi
+
+          # Test: denied user cannot create map
+          echo "Testing denied user..."
+          OUTPUT=$(sudo -u test_denied ./target/release/bpf-rbac create-map hash test2 4 8 100 2>&1) || true
+          if echo "$OUTPUT" | grep -q "Denied"; then
+            echo "✓ Denied user test passed"
+          else
+            echo "✗ Denied user test failed: $OUTPUT"
+            exit 1
+          fi
+
+          echo "All integration tests passed!"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          sudo pkill -f bpf-rbacd || true
+          sudo userdel -r test_allowed || true
+          sudo userdel -r test_denied || true
+          sudo rm -f /run/bpf-rbac.sock || true
+
+  # Ensure all jobs pass
+  check:
+    name: All CI passed
+    if: always()
+    needs:
+      - lint
+      - build
+      - test-unit
+      - test-integration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: re-actors/alls-green@release/v1
+        with:
+          jobs: ${{ toJSON(needs) }}

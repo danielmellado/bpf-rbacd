@@ -1,0 +1,24 @@
+[Unit]
+Description=BPF RBAC Daemon
+Documentation=man:bpf-rbacd(8)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/bpf-rbacd
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=false
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/run
+
+# Required capabilities for BPF
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_SYS_ADMIN
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_NET_ADMIN CAP_SYS_ADMIN
+
+[Install]
+WantedBy=multi-user.target

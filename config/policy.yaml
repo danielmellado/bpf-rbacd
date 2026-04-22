@@ -1,0 +1,72 @@
+# BPF RBAC Policy Configuration
+# /etc/bpf-rbac/policy.yaml
+
+roles:
+  # Tracing role - for observability workloads
+  ebpf:
+    description: "Tracing and observability programs"
+    groups:
+      - ebpf
+    prog_types:
+      - kprobe
+      - kretprobe
+      - uprobe
+      - uretprobe
+      - tracepoint
+      - raw_tracepoint
+      - perf_event
+      - fentry
+      - fexit
+    map_types:
+      - hash
+      - percpu_hash
+      - array
+      - percpu_array
+      - perf_event_array
+      - ringbuf
+      - stack_trace
+    attach_types: []  # Empty means allow all for allowed prog_types
+
+  # Networking role - for XDP, TC, socket programs
+  ebpf-net:
+    description: "Networking programs"
+    groups:
+      - ebpf-net
+    prog_types:
+      - xdp
+      - sched_cls
+      - sched_act
+      - socket_filter
+      - sk_skb
+      - sk_msg
+      - sock_ops
+      - lwt_in
+      - lwt_out
+      - lwt_xmit
+    map_types:
+      - hash
+      - percpu_hash
+      - array
+      - percpu_array
+      - lru_hash
+      - lru_percpu_hash
+      - devmap
+      - devmap_hash
+      - cpumap
+      - xskmap
+      - sockmap
+      - sockhash
+    attach_types: []
+
+  # Admin role - unrestricted access
+  ebpf-admin:
+    description: "Full BPF access for administrators"
+    groups:
+      - ebpf-admin
+      - wheel  # Also allow wheel group
+    prog_types:
+      - any
+    map_types:
+      - any
+    attach_types:
+      - any
