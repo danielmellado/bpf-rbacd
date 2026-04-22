@@ -19,9 +19,9 @@ categories = ["os::linux-apis", "command-line-utilities"]
 tokio = { version = "1", features = ["full", "net"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
-bincode = "1"
+bincode = "3"
 libc = "0.2"
-nix = { version = "0.28", features = ["user", "socket", "uio"] }
+nix = { version = "0.31", features = ["user", "socket", "uio"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 anyhow = "1"
