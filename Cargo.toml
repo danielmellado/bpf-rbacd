@@ -1,0 +1,48 @@
+[workspace]
+members = [".", "xtask"]
+
+[package]
+name = "bpf-rbacd"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "Role-Based Access Control daemon for eBPF - enables unprivileged users to safely use eBPF"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/fedora-bpf/bpf-rbacd"
+homepage = "https://github.com/fedora-bpf/bpf-rbacd"
+documentation = "https://github.com/fedora-bpf/bpf-rbacd#readme"
+readme = "README.md"
+keywords = ["ebpf", "bpf", "rbac", "security", "linux"]
+categories = ["os::linux-apis", "command-line-utilities"]
+
+[dependencies]
+tokio = { version = "1", features = ["full", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+bincode = "1"
+libc = "0.2"
+nix = { version = "0.28", features = ["user", "socket", "uio"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+anyhow = "1"
+
+[dev-dependencies]
+assert_matches = "1.5"
+test-log = { version = "0.2", features = ["log"] }
+env_logger = "0.11"
+
+[lib]
+name = "bpf_rbacd"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bpf-rbacd"
+path = "src/main.rs"
+
+[[bin]]
+name = "bpf-rbac"
+path = "src/bin/bpf-rbac.rs"
+
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
