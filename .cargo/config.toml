@@ -1,5 +1,5 @@
 # Cargo configuration for bpf-rbacd
-# 
+#
 # This enables the `cargo xtask` pattern for running development tasks.
 # See: https://github.com/matklad/cargo-xtask
 

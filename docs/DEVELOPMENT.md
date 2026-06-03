@@ -157,14 +157,14 @@ look up the right policy entry and allows everything through.
 All permission checks go through `src/policy.rs`. The policy is YAML:
 
 ```yaml
-system_policy:          # Optional ceiling — no role can exceed this
+system_policy: # Optional ceiling — no role can exceed this
   commands: [PROG_LOAD, MAP_CREATE]
   prog_types:
     kprobe: [load, attach]
 
 roles:
-  ebpf:                 # Role name
-    groups: [ebpf]      # Unix groups that get this role
+  ebpf: # Role name
+    groups: [ebpf] # Unix groups that get this role
     commands: [PROG_LOAD, MAP_CREATE, LINK_CREATE]
     prog_types:
       kprobe: [load, attach]
@@ -178,11 +178,11 @@ in the role but not in the system policy, so it's denied.
 
 Three built-in roles exist as defaults:
 
-| Role | Purpose | Scope |
-|------|---------|-------|
-| `ebpf` | Tracing workloads | kprobe, tracepoint, perf_event |
-| `ebpf-net` | Networking workloads | xdp, sched_cls, socket_filter |
-| `ebpf-admin` | Full access | everything (`any`) |
+| Role         | Purpose              | Scope                          |
+| ------------ | -------------------- | ------------------------------ |
+| `ebpf`       | Tracing workloads    | kprobe, tracepoint, perf_event |
+| `ebpf-net`   | Networking workloads | xdp, sched_cls, socket_filter  |
+| `ebpf-admin` | Full access          | everything (`any`)             |
 
 Role resolution checks groups in priority order: `ebpf-admin` > `ebpf-net` >
 `ebpf`, then any other roles.
@@ -209,11 +209,11 @@ The functions `commands_bitmap()`, `prog_types_bitmap()`, and
 
 Three hooks in `bpf-rbacd-ebpf/src/main.rs`:
 
-| Hook | What it checks | When it fires |
-|------|---------------|---------------|
-| `security_bpf` | Is this `bpf()` command allowed? | Every `bpf()` syscall |
-| `security_bpf_prog_load` | Is this program type allowed? | Program loading |
-| `security_bpf_map_create` | Is this map type allowed? | Map creation |
+| Hook                      | What it checks                   | When it fires         |
+| ------------------------- | -------------------------------- | --------------------- |
+| `security_bpf`            | Is this `bpf()` command allowed? | Every `bpf()` syscall |
+| `security_bpf_prog_load`  | Is this program type allowed?    | Program loading       |
+| `security_bpf_map_create` | Is this map type allowed?        | Map creation          |
 
 Each hook follows the same pattern:
 
@@ -296,16 +296,16 @@ updates. All jobs must pass before merging.
 
 ### Jobs
 
-| Job | Toolchain | What it does |
-|-----|-----------|-------------|
-| **Lint** | stable | `cargo fmt --all --check` and `cargo clippy --all-targets --all-features -D warnings` on the main workspace |
-| **Lint eBPF** | nightly | `cargo fmt --check` on `bpf-rbacd-ebpf/` (separate workspace, needs nightly) |
-| **Build** | stable + beta | `cargo build --all-targets` and `cargo build --release` to catch regressions on both channels |
-| **Build eBPF** | nightly | Installs `bpf-linker`, then builds the eBPF crate for `bpfel-unknown-none` with `-Z build-std=core`. Needs `rust-src` component |
-| **Unit Tests** | stable | `cargo test --lib` (in-module tests) and `cargo test --doc` (doc examples) |
-| **Integration Tests** | stable | `cargo test --test integration` — runs the non-privileged tests from `tests/integration.rs`. Tests that need root or `CAP_BPF` are `#[ignore]` and skipped |
-| **Documentation** | stable | `cargo doc` with `-D warnings` for the workspace and for `bpf-rbacd-common --features user` |
-| **All CI passed** | — | Gate job using `alls-green`. All 7 jobs above must succeed |
+| Job                   | Toolchain     | What it does                                                                                                                                               |
+| --------------------- | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Lint**              | stable        | `cargo fmt --all --check` and `cargo clippy --all-targets --all-features -D warnings` on the main workspace                                                |
+| **Lint eBPF**         | nightly       | `cargo fmt --check` on `bpf-rbacd-ebpf/` (separate workspace, needs nightly)                                                                               |
+| **Build**             | stable + beta | `cargo build --all-targets` and `cargo build --release` to catch regressions on both channels                                                              |
+| **Build eBPF**        | nightly       | Installs `bpf-linker`, then builds the eBPF crate for `bpfel-unknown-none` with `-Z build-std=core`. Needs `rust-src` component                            |
+| **Unit Tests**        | stable        | `cargo test --lib` (in-module tests) and `cargo test --doc` (doc examples)                                                                                 |
+| **Integration Tests** | stable        | `cargo test --test integration` — runs the non-privileged tests from `tests/integration.rs`. Tests that need root or `CAP_BPF` are `#[ignore]` and skipped |
+| **Documentation**     | stable        | `cargo doc` with `-D warnings` for the workspace and for `bpf-rbacd-common --features user`                                                                |
+| **All CI passed**     | —             | Gate job using `alls-green`. All 7 jobs above must succeed                                                                                                 |
 
 ### Why two workspaces?
 

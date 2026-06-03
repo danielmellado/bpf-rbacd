@@ -143,8 +143,17 @@ Policies are defined in YAML and support three layers of control:
 
 # System-wide ceiling — no role can exceed this
 system_policy:
-  commands: [PROG_LOAD, MAP_CREATE, MAP_LOOKUP_ELEM, MAP_UPDATE_ELEM,
-             LINK_CREATE, OBJ_PIN, OBJ_GET, BTF_LOAD]
+  commands:
+    [
+      PROG_LOAD,
+      MAP_CREATE,
+      MAP_LOOKUP_ELEM,
+      MAP_UPDATE_ELEM,
+      LINK_CREATE,
+      OBJ_PIN,
+      OBJ_GET,
+      BTF_LOAD,
+    ]
   prog_types:
     kprobe: [load, attach, detach]
     tracepoint: [load, attach, detach]
@@ -158,8 +167,15 @@ roles:
   # Tracing role — effective policy = intersection with system_policy
   ebpf:
     groups: [ebpf]
-    commands: [PROG_LOAD, MAP_CREATE, MAP_LOOKUP_ELEM, MAP_UPDATE_ELEM,
-               LINK_CREATE, BTF_LOAD]
+    commands:
+      [
+        PROG_LOAD,
+        MAP_CREATE,
+        MAP_LOOKUP_ELEM,
+        MAP_UPDATE_ELEM,
+        LINK_CREATE,
+        BTF_LOAD,
+      ]
     prog_types:
       kprobe: [load, attach]
       tracepoint: [load, attach]
@@ -171,8 +187,16 @@ roles:
   # Networking role
   ebpf-net:
     groups: [ebpf-net]
-    commands: [PROG_LOAD, MAP_CREATE, MAP_LOOKUP_ELEM, MAP_UPDATE_ELEM,
-               LINK_CREATE, PROG_ATTACH, BTF_LOAD]
+    commands:
+      [
+        PROG_LOAD,
+        MAP_CREATE,
+        MAP_LOOKUP_ELEM,
+        MAP_UPDATE_ELEM,
+        LINK_CREATE,
+        PROG_ATTACH,
+        BTF_LOAD,
+      ]
     prog_types:
       xdp: [load, attach, detach]
       sched_cls: [load, attach, detach]
@@ -184,8 +208,8 @@ roles:
   ebpf-admin:
     groups: [ebpf-admin, wheel]
     commands: [any]
-    prog_types: {any: [any]}
-    map_types: {any: [any]}
+    prog_types: { any: [any] }
+    map_types: { any: [any] }
 ```
 
 ### Policy Model
@@ -205,11 +229,11 @@ cargo doc --no-deps --open
 
 This produces documentation for all public types and functions, including:
 
-| Module | Description |
-|--------|-------------|
-| `policy` | YAML policy parsing, role resolution, system-policy intersection, bitmap generation |
-| `namespace` | User namespace delegation via the "nsenter dance" |
-| `protocol` | Wire protocol and client library for proxy mode |
+| Module      | Description                                                                         |
+| ----------- | ----------------------------------------------------------------------------------- |
+| `policy`    | YAML policy parsing, role resolution, system-policy intersection, bitmap generation |
+| `namespace` | User namespace delegation via the "nsenter dance"                                   |
+| `protocol`  | Wire protocol and client library for proxy mode                                     |
 
 The shared types crate (`bpf-rbacd-common`) is also documented:
 
@@ -262,14 +286,14 @@ bpf-rbacd-ebpf (eBPF LSM, target = bpfel-unknown-none)
 
 ## Security Model
 
-| Property | Implementation |
-|----------|----------------|
-| **Authentication** | Kernel-verified `SO_PEERCRED` (proxy), user namespace ID (LSM) |
-| **Authorization** | Group membership + YAML policy + system-policy intersection |
-| **Enforcement** | eBPF LSM hooks in kernel (capability mode), daemon-side checks (proxy mode) |
-| **Least privilege** | Per-role control over commands, program types, map types, and operations |
-| **Fail closed** | Unknown operations and missing policy entries are denied |
-| **Audit trail** | All operations logged via journald |
+| Property            | Implementation                                                              |
+| ------------------- | --------------------------------------------------------------------------- |
+| **Authentication**  | Kernel-verified `SO_PEERCRED` (proxy), user namespace ID (LSM)              |
+| **Authorization**   | Group membership + YAML policy + system-policy intersection                 |
+| **Enforcement**     | eBPF LSM hooks in kernel (capability mode), daemon-side checks (proxy mode) |
+| **Least privilege** | Per-role control over commands, program types, map types, and operations    |
+| **Fail closed**     | Unknown operations and missing policy entries are denied                    |
+| **Audit trail**     | All operations logged via journald                                          |
 
 ## Testing
 
@@ -309,13 +333,13 @@ cargo +nightly build -Z build-std=core --target bpfel-unknown-none
 
 ### Test Coverage
 
-| Test Category | Count | Root Required |
-|---------------|-------|---------------|
-| Policy engine (commands, types, bitmaps, intersection) | 12 | No |
-| Namespace delegation (opts, bpffs mount, lifecycle) | 8 | Partial |
-| LSM loading (ELF validation, attach, map population) | 4 | Yes |
-| Proxy mode (allowed/denied map creation) | 4 | Yes |
-| **Total** | **28** | |
+| Test Category                                          | Count  | Root Required |
+| ------------------------------------------------------ | ------ | ------------- |
+| Policy engine (commands, types, bitmaps, intersection) | 12     | No            |
+| Namespace delegation (opts, bpffs mount, lifecycle)    | 8      | Partial       |
+| LSM loading (ELF validation, attach, map population)   | 4      | Yes           |
+| Proxy mode (allowed/denied map creation)               | 4      | Yes           |
+| **Total**                                              | **28** |               |
 
 ## Related Projects
 

@@ -1,10 +1,10 @@
 # bpf-rbacd Design Proposal
 
-| Field | Value |
-|-------|-------|
-| **Status** | WIP |
-| **Authors** | Daniel Mellado, Viktor Malik, Toke Høiland-Jørgensen |
-| **Last Updated** | 2026-06-03 |
+| Field            | Value                                                |
+| ---------------- | ---------------------------------------------------- |
+| **Status**       | WIP                                                  |
+| **Authors**      | Daniel Mellado, Viktor Malik, Toke Høiland-Jørgensen |
+| **Last Updated** | 2026-06-03                                           |
 
 ---
 
@@ -82,12 +82,12 @@ Because we cannot require application changes, we need a **capability-granting**
 
 ### Component Responsibilities
 
-| Component | Role |
-|-----------|------|
+| Component            | Role                                                                  |
+| -------------------- | --------------------------------------------------------------------- |
 | **bpf-rbacd daemon** | Reads policy, performs namespace delegation, populates map, loads LSM |
-| **eBPF LSM** | Enforces granular permissions based on policy in eBPF map |
-| **eBPF map** | Communication channel between daemon and LSM, keyed by userns ID |
-| **Proxy mode** | Fallback for init_user_ns clients (existing functionality) |
+| **eBPF LSM**         | Enforces granular permissions based on policy in eBPF map             |
+| **eBPF map**         | Communication channel between daemon and LSM, keyed by userns ID      |
+| **Proxy mode**       | Fallback for init_user_ns clients (existing functionality)            |
 
 The LSM and the daemon are **logically separate components** but part of the same codebase. They communicate via the eBPF map.
 
@@ -125,10 +125,10 @@ The daemon must **enter the target user namespace** before mounting bpffs. A sim
 
 The application inside the user namespace needs Linux capabilities **scoped to the namespace**:
 
-| Capability | Required For |
-|------------|--------------|
-| `CAP_BPF` | All BPF operations |
-| `CAP_PERFMON` | Tracing program types (kprobe, tracepoint) |
+| Capability      | Required For                                       |
+| --------------- | -------------------------------------------------- |
+| `CAP_BPF`       | All BPF operations                                 |
+| `CAP_PERFMON`   | Tracing program types (kprobe, tracepoint)         |
 | `CAP_NET_ADMIN` | Network program types (XDP, TC) and some map types |
 
 An application can **drop capabilities** after installing its programs.
@@ -160,13 +160,13 @@ policy_map.insert(key, value, 0)?;
 
 ### Policy Dimensions
 
-| Dimension | Description |
-|-----------|-------------|
-| **Allowed bpf() commands** | Which syscall commands can be invoked |
-| **Allowed map types** | Which map types can be created, with operations (create/read/write) |
-| **Allowed program types** | Which program types can be loaded, with operations (load/attach/detach/test_run/bind_map) |
-| **Allowed attachment points** | Where programs can attach (device names, function names, tracepoints) |
-| **Allowed helpers/kfuncs** | Which BPF helpers and kfuncs are permitted (future work) |
+| Dimension                     | Description                                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------------- |
+| **Allowed bpf() commands**    | Which syscall commands can be invoked                                                     |
+| **Allowed map types**         | Which map types can be created, with operations (create/read/write)                       |
+| **Allowed program types**     | Which program types can be loaded, with operations (load/attach/detach/test_run/bind_map) |
+| **Allowed attachment points** | Where programs can attach (device names, function names, tracepoints)                     |
+| **Allowed helpers/kfuncs**    | Which BPF helpers and kfuncs are permitted (future work)                                  |
 
 ### Policy Format
 
@@ -174,8 +174,18 @@ policy_map.insert(key, value, 0)?;
 # /etc/bpf-rbac/policy.yaml
 
 system_policy:
-  commands: [PROG_LOAD, MAP_CREATE, MAP_LOOKUP_ELEM, MAP_UPDATE_ELEM,
-             MAP_DELETE_ELEM, LINK_CREATE, OBJ_PIN, OBJ_GET, BTF_LOAD]
+  commands:
+    [
+      PROG_LOAD,
+      MAP_CREATE,
+      MAP_LOOKUP_ELEM,
+      MAP_UPDATE_ELEM,
+      MAP_DELETE_ELEM,
+      LINK_CREATE,
+      OBJ_PIN,
+      OBJ_GET,
+      BTF_LOAD,
+    ]
   prog_types:
     kprobe: [load, attach, detach]
     tracepoint: [load, attach, detach]
@@ -190,7 +200,8 @@ system_policy:
 roles:
   ebpf:
     groups: [ebpf]
-    commands: [PROG_LOAD, MAP_CREATE, MAP_LOOKUP_ELEM, MAP_UPDATE_ELEM, LINK_CREATE]
+    commands:
+      [PROG_LOAD, MAP_CREATE, MAP_LOOKUP_ELEM, MAP_UPDATE_ELEM, LINK_CREATE]
     prog_types:
       kprobe: [load, attach]
       tracepoint: [load, attach]
@@ -202,7 +213,8 @@ roles:
 
   ebpf-net:
     groups: [ebpf-net]
-    commands: [PROG_LOAD, MAP_CREATE, MAP_LOOKUP_ELEM, MAP_UPDATE_ELEM, LINK_CREATE]
+    commands:
+      [PROG_LOAD, MAP_CREATE, MAP_LOOKUP_ELEM, MAP_UPDATE_ELEM, LINK_CREATE]
     prog_types:
       xdp: [load, attach, detach]
       sched_cls: [load, attach, detach]
@@ -215,8 +227,8 @@ roles:
   ebpf-admin:
     groups: [ebpf-admin, wheel]
     commands: [any]
-    prog_types: {any: [any]}
-    map_types: {any: [any]}
+    prog_types: { any: [any] }
+    map_types: { any: [any] }
 ```
 
 ### Default Policy
@@ -296,10 +308,10 @@ Loading the LSM itself requires BPF privileges. bpf-rbacd runs as a privileged d
 
 bpf-rbacd will support **two modes simultaneously**:
 
-| Mode | Target Users | Mechanism |
-|------|-------------|-----------|
-| **Capability granting** | Containers/services in user namespaces | Token delegation + LSM enforcement |
-| **Proxy execution** | Desktop users in init_user_ns | Daemon executes BPF on behalf (existing) |
+| Mode                    | Target Users                           | Mechanism                                |
+| ----------------------- | -------------------------------------- | ---------------------------------------- |
+| **Capability granting** | Containers/services in user namespaces | Token delegation + LSM enforcement       |
+| **Proxy execution**     | Desktop users in init_user_ns          | Daemon executes BPF on behalf (existing) |
 
 This allows the daemon to serve both use cases from a single process.
 
@@ -322,6 +334,7 @@ and namespace delegation library. Each component is independently testable.
 - [x] Maintain backward compatibility with existing proxy mode
 
 **Note — stubbed in this phase:**
+
 - The userns ID resolver in `bpf-rbacd-ebpf` returns 0 (needs CO-RE/BTF access to `current->nsproxy->user_ns->ns.inum`)
 
 ### Phase 2: Component Testing ✅
@@ -360,14 +373,14 @@ Test the complete system in real environments.
 
 ## Known Limitations and Open Questions
 
-| Item | Status | Notes |
-|------|--------|-------|
-| Program/map type restriction | Feasible | Via LSM hooks |
-| Syscall command restriction | Feasible | Via `security_bpf` hook |
-| Attachment point restriction | Partial | Devices feasible via `security_netlink_send`; functions harder |
-| Helper/kfunc restriction | TBD | May require kernel changes; not inspectable from LSM hook easily |
+| Item                          | Status        | Notes                                                                   |
+| ----------------------------- | ------------- | ----------------------------------------------------------------------- |
+| Program/map type restriction  | Feasible      | Via LSM hooks                                                           |
+| Syscall command restriction   | Feasible      | Via `security_bpf` hook                                                 |
+| Attachment point restriction  | Partial       | Devices feasible via `security_netlink_send`; functions harder          |
+| Helper/kfunc restriction      | TBD           | May require kernel changes; not inspectable from LSM hook easily        |
 | Bind-mount of bpffs from host | Does NOT work | Must enter target userns before mounting; `s_user_ns` set at mount time |
-| Init user namespace users | Proxy only | Cannot use BPF tokens in init_user_ns (`EOPNOTSUPP`) |
+| Init user namespace users     | Proxy only    | Cannot use BPF tokens in init_user_ns (`EOPNOTSUPP`)                    |
 
 ### Open Questions
 

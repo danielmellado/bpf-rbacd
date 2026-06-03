@@ -229,10 +229,10 @@ run_test() {{
     local user="$2"
     local expected="$3"
     shift 3
-    
+
     printf "  [%s]: " "$name"
     OUTPUT=$(sudo -u "$user" ./target/release/bpf-rbac "$@" 2>&1) || true
-    
+
     if [ "$expected" = "pass" ]; then
         if echo "$OUTPUT" | grep -q "Success"; then
             echo "PASS"
