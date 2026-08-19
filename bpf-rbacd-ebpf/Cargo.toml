@@ -9,8 +9,8 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-aya-ebpf = "0.2"
-aya-log-ebpf = "0.2"
+aya-ebpf = { git = "https://github.com/aya-rs/aya", rev = "70e1983a83cef42d88ceff2270212c3d41351917" }
+aya-log-ebpf = { git = "https://github.com/aya-rs/aya", rev = "70e1983a83cef42d88ceff2270212c3d41351917" }
 bpf-rbacd-common = { path = "../bpf-rbacd-common" }
 
 [[bin]]

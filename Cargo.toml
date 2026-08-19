@@ -33,8 +33,8 @@ bpf-rbacd-common = { path = "bpf-rbacd-common", features = ["user"] }
 assert_matches = "1.5"
 test-log = { version = "0.2", features = ["log"] }
 env_logger = "0.11"
-aya = "0.14"
-aya-log = "0.3"
+aya = { git = "https://github.com/aya-rs/aya", rev = "70e1983a83cef42d88ceff2270212c3d41351917" }
+aya-log = { git = "https://github.com/aya-rs/aya", rev = "70e1983a83cef42d88ceff2270212c3d41351917" }
 
 [lib]
 name = "bpf_rbacd"

@@ -177,6 +177,51 @@ pub mod map_types {
     pub const RINGBUF: u32 = 27;
 }
 
+/// BPF instruction layout matching the kernel's `struct bpf_insn`.
+///
+/// Each BPF instruction is exactly 8 bytes. The `code` field encodes
+/// the operation class and source/mode bits. For call instructions,
+/// `src_reg` distinguishes helper calls (0) from kfunc calls (2) and
+/// `imm` holds the callee identifier.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BpfInsn {
+    /// Opcode: class | source | mode.
+    pub code: u8,
+    /// Packed dst_reg (low nibble) and src_reg (high nibble).
+    pub regs: u8,
+    /// Signed offset used by jumps and memory ops.
+    pub off: i16,
+    /// Signed immediate operand (helper ID, kfunc BTF ID, etc.).
+    pub imm: i32,
+}
+
+impl BpfInsn {
+    /// Extract the source register (high nibble of `regs`).
+    pub const fn src_reg(&self) -> u8 {
+        self.regs >> 4
+    }
+
+    /// Extract the destination register (low nibble of `regs`).
+    pub const fn dst_reg(&self) -> u8 {
+        self.regs & 0x0f
+    }
+}
+
+/// BPF instruction class and opcode constants from `include/uapi/linux/bpf.h`.
+pub mod insn {
+    /// Instruction class: jump (64-bit).
+    pub const BPF_JMP: u8 = 0x05;
+    /// Source modifier: call instruction.
+    pub const BPF_CALL: u8 = 0x80;
+    /// Opcode for a BPF function call (`BPF_JMP | BPF_CALL`).
+    pub const BPF_JMP_CALL: u8 = BPF_JMP | BPF_CALL; // 0x85
+    /// src_reg value indicating a kfunc call (BPF_PSEUDO_KFUNC_CALL).
+    pub const BPF_PSEUDO_KFUNC_CALL: u8 = 2;
+    /// src_reg value indicating a helper call.
+    pub const BPF_HELPER_CALL: u8 = 0;
+}
+
 #[cfg(feature = "user")]
 unsafe impl aya::Pod for PolicyKey {}
 #[cfg(feature = "user")]
