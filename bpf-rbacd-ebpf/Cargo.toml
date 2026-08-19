@@ -9,8 +9,8 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-aya-ebpf = "0.1"
-aya-log-ebpf = "0.1"
+aya-ebpf = "0.2"
+aya-log-ebpf = "0.2"
 bpf-rbacd-common = { path = "../bpf-rbacd-common" }
 
 [[bin]]
