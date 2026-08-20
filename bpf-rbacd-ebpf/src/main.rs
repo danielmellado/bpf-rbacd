@@ -54,7 +54,7 @@ fn try_bpf_rbac_bpf(ctx: &LsmContext) -> Result<i32, i64> {
 
     let policy = match policy {
         Some(p) => p,
-        None => return Ok(0), // Not a managed namespace
+        None => return Ok(-1), // Not a managed namespace
     };
 
     if policy.flags & flags::POLICY_FLAG_DENY_ALL != 0 {
@@ -104,7 +104,7 @@ fn try_bpf_rbac_prog_load(ctx: &LsmContext) -> Result<i32, i64> {
 
     let policy = match policy {
         Some(p) => p,
-        None => return Ok(0),
+        None => return Ok(-1),
     };
 
     if policy.flags & flags::POLICY_FLAG_DENY_ALL != 0 {
@@ -166,7 +166,7 @@ fn try_bpf_rbac_map_create(ctx: &LsmContext) -> Result<i32, i64> {
 
     let policy = match policy {
         Some(p) => p,
-        None => return Ok(0),
+        None => return Ok(-1),
     };
 
     if policy.flags & flags::POLICY_FLAG_DENY_ALL != 0 {
