@@ -47,12 +47,13 @@
 //!
 //! # Bitmap generation
 //!
-//! The policy engine can convert role permissions into `u32` bitmaps
+//! The policy engine can convert role permissions into `u64` bitmaps
 //! suitable for the eBPF map shared with the LSM programs. Each bit
 //! position corresponds to the kernel's enum value for that program type,
 //! map type, or command.
 
 use anyhow::Result;
+use bpf_rbacd_common::{BpfCmd, BpfMapType, BpfProgType};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -284,31 +285,31 @@ impl Policy {
         }
     }
 
-    /// Convert a role's allowed program types into a `u32` bitmap.
+    /// Convert a role's allowed program types into a `u64` bitmap.
     ///
     /// Each bit position corresponds to the kernel's `BPF_PROG_TYPE_*` enum
     /// value. The result is intersected with the system policy if one exists.
     /// This bitmap is written to the eBPF map for LSM enforcement.
-    pub fn prog_types_bitmap(&self, role: &Role) -> u32 {
+    pub fn prog_types_bitmap(&self, role: &Role) -> u64 {
         if role.prog_types.contains_key("any") {
-            return 0xFFFFFFFF;
+            return u64::MAX;
         }
 
-        let mut bitmap: u32 = 0;
+        let mut bitmap: u64 = 0;
         for prog_type in role.prog_types.keys() {
-            if let Some(bit) = prog_type_to_bit(prog_type) {
-                bitmap |= 1 << bit;
+            if let Some(pt) = BpfProgType::from_policy_name(prog_type) {
+                bitmap |= pt.to_bitmap_mask();
             }
         }
 
         if let Some(ref system) = self.config.system_policy {
             let system_bitmap = if system.prog_types.contains_key("any") {
-                0xFFFFFFFF
+                u64::MAX
             } else {
-                let mut b: u32 = 0;
+                let mut b: u64 = 0;
                 for pt in system.prog_types.keys() {
-                    if let Some(bit) = prog_type_to_bit(pt) {
-                        b |= 1 << bit;
+                    if let Some(pt) = BpfProgType::from_policy_name(pt) {
+                        b |= pt.to_bitmap_mask();
                     }
                 }
                 b
@@ -319,30 +320,30 @@ impl Policy {
         bitmap
     }
 
-    /// Convert a role's allowed map types into a `u32` bitmap.
+    /// Convert a role's allowed map types into a `u64` bitmap.
     ///
     /// Each bit position corresponds to the kernel's `BPF_MAP_TYPE_*` enum
     /// value. The result is intersected with the system policy if one exists.
-    pub fn map_types_bitmap(&self, role: &Role) -> u32 {
+    pub fn map_types_bitmap(&self, role: &Role) -> u64 {
         if role.map_types.contains_key("any") {
-            return 0xFFFFFFFF;
+            return u64::MAX;
         }
 
-        let mut bitmap: u32 = 0;
+        let mut bitmap: u64 = 0;
         for map_type in role.map_types.keys() {
-            if let Some(bit) = map_type_to_bit(map_type) {
-                bitmap |= 1 << bit;
+            if let Some(mt) = BpfMapType::from_policy_name(map_type) {
+                bitmap |= mt.to_bitmap_mask();
             }
         }
 
         if let Some(ref system) = self.config.system_policy {
             let system_bitmap = if system.map_types.contains_key("any") {
-                0xFFFFFFFF
+                u64::MAX
             } else {
-                let mut b: u32 = 0;
+                let mut b: u64 = 0;
                 for mt in system.map_types.keys() {
-                    if let Some(bit) = map_type_to_bit(mt) {
-                        b |= 1 << bit;
+                    if let Some(mt) = BpfMapType::from_policy_name(mt) {
+                        b |= mt.to_bitmap_mask();
                     }
                 }
                 b
@@ -353,30 +354,30 @@ impl Policy {
         bitmap
     }
 
-    /// Convert a role's allowed commands into a `u32` bitmap.
+    /// Convert a role's allowed commands into a `u64` bitmap.
     ///
     /// Each bit position corresponds to the kernel's `BPF_*` command enum
     /// value (e.g. `BPF_MAP_CREATE` = bit 0, `BPF_PROG_LOAD` = bit 5).
-    pub fn commands_bitmap(&self, role: &Role) -> u32 {
+    pub fn commands_bitmap(&self, role: &Role) -> u64 {
         if role.commands.iter().any(|c| c == "any") {
-            return 0xFFFFFFFF;
+            return u64::MAX;
         }
 
-        let mut bitmap: u32 = 0;
+        let mut bitmap: u64 = 0;
         for cmd in &role.commands {
-            if let Some(bit) = command_to_bit(cmd) {
-                bitmap |= 1 << bit;
+            if let Some(cmd) = BpfCmd::from_policy_name(cmd) {
+                bitmap |= cmd.to_bitmap_mask();
             }
         }
 
         if let Some(ref system) = self.config.system_policy {
             let system_bitmap = if system.commands.iter().any(|c| c == "any") {
-                0xFFFFFFFF
+                u64::MAX
             } else {
-                let mut b: u32 = 0;
+                let mut b: u64 = 0;
                 for cmd in &system.commands {
-                    if let Some(bit) = command_to_bit(cmd) {
-                        b |= 1 << bit;
+                    if let Some(cmd) = BpfCmd::from_policy_name(cmd) {
+                        b |= cmd.to_bitmap_mask();
                     }
                 }
                 b
@@ -397,120 +398,6 @@ fn check_type_op(type_map: &HashMap<String, Vec<String>>, type_name: &str, op: &
         return ops.iter().any(|o| o == "any" || o == op);
     }
     false
-}
-
-/// Map program type name to kernel BPF_PROG_TYPE_* enum value.
-fn prog_type_to_bit(name: &str) -> Option<u32> {
-    match name {
-        "socket_filter" => Some(1),
-        "kprobe" | "kretprobe" => Some(2),
-        "sched_cls" => Some(3),
-        "sched_act" => Some(4),
-        "tracepoint" => Some(5),
-        "xdp" => Some(6),
-        "perf_event" => Some(7),
-        "cgroup_skb" => Some(8),
-        "cgroup_sock" => Some(9),
-        "lwt_in" => Some(10),
-        "lwt_out" => Some(11),
-        "lwt_xmit" => Some(12),
-        "sock_ops" => Some(13),
-        "sk_skb" => Some(14),
-        "cgroup_device" => Some(15),
-        "sk_msg" => Some(16),
-        "raw_tracepoint" => Some(17),
-        "cgroup_sock_addr" => Some(18),
-        "lwt_seg6local" => Some(19),
-        "lirc_mode2" => Some(20),
-        "sk_reuseport" => Some(21),
-        "flow_dissector" => Some(22),
-        "cgroup_sysctl" => Some(23),
-        "raw_tracepoint_writable" => Some(24),
-        "cgroup_sockopt" => Some(25),
-        "tracing" | "fentry" | "fexit" => Some(26),
-        "struct_ops" => Some(27),
-        "ext" => Some(28),
-        "lsm" => Some(29),
-        "sk_lookup" => Some(30),
-        "uprobe" | "uretprobe" => Some(2), // kprobe type in kernel
-        _ => None,
-    }
-}
-
-/// Map map type name to kernel BPF_MAP_TYPE_* enum value.
-fn map_type_to_bit(name: &str) -> Option<u32> {
-    match name {
-        "hash" => Some(1),
-        "array" => Some(2),
-        "prog_array" => Some(3),
-        "perf_event_array" => Some(4),
-        "percpu_hash" => Some(5),
-        "percpu_array" => Some(6),
-        "stack_trace" => Some(7),
-        "cgroup_array" => Some(8),
-        "lru_hash" => Some(9),
-        "lru_percpu_hash" => Some(10),
-        "lpm_trie" => Some(11),
-        "array_of_maps" => Some(12),
-        "hash_of_maps" => Some(13),
-        "devmap" => Some(14),
-        "sockmap" => Some(15),
-        "cpumap" => Some(16),
-        "xskmap" => Some(17),
-        "sockhash" => Some(18),
-        "cgroup_storage" => Some(19),
-        "reuseport_sockarray" => Some(20),
-        "percpu_cgroup_storage" => Some(21),
-        "queue" => Some(22),
-        "stack" => Some(23),
-        "sk_storage" => Some(24),
-        "devmap_hash" => Some(25),
-        "struct_ops" => Some(26),
-        "ringbuf" => Some(27),
-        "inode_storage" => Some(28),
-        "task_storage" => Some(29),
-        "bloom_filter" => Some(30),
-        _ => None,
-    }
-}
-
-/// Map BPF command name to kernel BPF_* command number.
-fn command_to_bit(name: &str) -> Option<u32> {
-    match name {
-        "MAP_CREATE" => Some(0),
-        "MAP_LOOKUP_ELEM" => Some(1),
-        "MAP_UPDATE_ELEM" => Some(2),
-        "MAP_DELETE_ELEM" => Some(3),
-        "MAP_GET_NEXT_KEY" => Some(4),
-        "PROG_LOAD" => Some(5),
-        "OBJ_PIN" => Some(6),
-        "OBJ_GET" => Some(7),
-        "PROG_ATTACH" => Some(8),
-        "PROG_DETACH" => Some(9),
-        "PROG_TEST_RUN" => Some(10),
-        "PROG_GET_NEXT_ID" => Some(11),
-        "MAP_GET_NEXT_ID" => Some(12),
-        "PROG_GET_FD_BY_ID" => Some(13),
-        "MAP_GET_FD_BY_ID" => Some(14),
-        "OBJ_GET_INFO_BY_FD" => Some(15),
-        "PROG_QUERY" => Some(16),
-        "RAW_TRACEPOINT_OPEN" => Some(17),
-        "BTF_LOAD" => Some(18),
-        "BTF_GET_FD_BY_ID" => Some(19),
-        "TASK_FD_QUERY" => Some(20),
-        "MAP_LOOKUP_AND_DELETE_ELEM" => Some(21),
-        "MAP_FREEZE" => Some(22),
-        "BTF_GET_NEXT_ID" => Some(23),
-        "MAP_LOOKUP_BATCH" => Some(24),
-        "MAP_LOOKUP_AND_DELETE_BATCH" => Some(25),
-        "MAP_UPDATE_BATCH" => Some(26),
-        "MAP_DELETE_BATCH" => Some(27),
-        "LINK_CREATE" => Some(28),
-        "LINK_UPDATE" => Some(29),
-        "LINK_GET_FD_BY_ID" => Some(30),
-        "LINK_GET_NEXT_ID" => Some(31),
-        _ => None,
-    }
 }
 
 impl Default for Policy {
@@ -723,14 +610,14 @@ mod tests {
 
         let prog_bitmap = policy.prog_types_bitmap(role);
         // kprobe=2, tracepoint=5, perf_event=7, raw_tracepoint=17, uprobe=2
-        assert!(prog_bitmap & (1 << 2) != 0); // kprobe
-        assert!(prog_bitmap & (1 << 5) != 0); // tracepoint
-        assert!(prog_bitmap & (1 << 6) == 0); // xdp not allowed
+        assert!(prog_bitmap & (1u64 << 2) != 0); // kprobe
+        assert!(prog_bitmap & (1u64 << 5) != 0); // tracepoint
+        assert!(prog_bitmap & (1u64 << 6) == 0); // xdp not allowed
 
         let map_bitmap = policy.map_types_bitmap(role);
-        assert!(map_bitmap & (1 << 1) != 0); // hash
-        assert!(map_bitmap & (1 << 2) != 0); // array
-        assert!(map_bitmap & (1 << 14) == 0); // devmap not allowed
+        assert!(map_bitmap & (1u64 << 1) != 0); // hash
+        assert!(map_bitmap & (1u64 << 2) != 0); // array
+        assert!(map_bitmap & (1u64 << 14) == 0); // devmap not allowed
     }
 
     #[test]

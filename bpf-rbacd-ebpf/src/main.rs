@@ -64,9 +64,8 @@ fn try_bpf_rbac_bpf(ctx: &LsmContext) -> Result<i32, i64> {
         return Ok(0);
     }
 
-    // Check if this command is in the allowed bitmap
     let cmd_bit = cmd as u32;
-    if cmd_bit < 32 && (policy.allowed_cmds & (1 << cmd_bit)) != 0 {
+    if cmd_bit < 64 && (policy.allowed_cmds & (1u64 << cmd_bit)) != 0 {
         Ok(0)
     } else {
         info!(ctx, "bpf_rbac: denied cmd={} for userns={}", cmd, userns_id);
@@ -125,7 +124,7 @@ fn try_bpf_rbac_prog_load(ctx: &LsmContext) -> Result<i32, i64> {
     }
     let prog_type: u32 = unsafe { core::ptr::read_volatile(attr) };
 
-    if prog_type < 32 && (policy.allowed_prog_types & (1 << prog_type)) != 0 {
+    if prog_type < 64 && (policy.allowed_prog_types & (1u64 << prog_type)) != 0 {
         Ok(0)
     } else {
         info!(
@@ -183,7 +182,7 @@ fn try_bpf_rbac_map_create(ctx: &LsmContext) -> Result<i32, i64> {
     }
     let map_type: u32 = unsafe { core::ptr::read_volatile(attr) };
 
-    if map_type < 32 && (policy.allowed_map_types & (1 << map_type)) != 0 {
+    if map_type < 64 && (policy.allowed_map_types & (1u64 << map_type)) != 0 {
         Ok(0)
     } else {
         info!(
