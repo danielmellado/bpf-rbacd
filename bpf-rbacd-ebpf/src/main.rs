@@ -6,14 +6,49 @@
 
 #![no_std]
 #![no_main]
+// The link_section attribute on extern fns is the current way to declare
+// kfuncs in Rust eBPF programs. The compiler warns it will become a hard
+// error, but there is no alternative yet -- see aya-rs/aya#432.
+#![allow(unused_attributes)]
 
 use aya_ebpf::{
+    helpers::bpf_probe_read_kernel,
     macros::{lsm, map},
     maps::HashMap,
     programs::LsmContext,
 };
 use aya_log_ebpf::info;
-use bpf_rbacd_common::{flags, PolicyKey, PolicyValue, MAX_POLICY_ENTRIES};
+use bpf_rbacd_common::{flags, insn, BpfInsn, PolicyKey, PolicyValue, MAX_POLICY_ENTRIES};
+
+// ---------------------------------------------------------------------------
+// Open-coded iterator kfunc declarations (kernel 6.4+)
+//
+// These are kernel functions resolved at load time via BTF. The
+// .ksyms link section tells the loader to look them up in vmlinux BTF
+// rather than expecting them in the ELF object.
+// ---------------------------------------------------------------------------
+
+/// On-stack state for the numeric open-coded iterator.
+/// Size must match the kernel's `struct bpf_iter_num` (8 bytes, 8-aligned).
+#[repr(C, align(8))]
+struct BpfIterNum {
+    __opaque: [u64; 1],
+}
+
+unsafe extern "C" {
+    /// Initialize a numeric iterator over the range `[start, end)`.
+    #[link_section = ".ksyms"]
+    fn bpf_iter_num_new(it: *mut BpfIterNum, start: i32, end: i32) -> i32;
+
+    /// Advance the iterator. Returns a pointer to the current value,
+    /// or NULL when iteration is complete.
+    #[link_section = ".ksyms"]
+    fn bpf_iter_num_next(it: *mut BpfIterNum) -> *const i32;
+
+    /// Destroy the iterator and free stack resources.
+    #[link_section = ".ksyms"]
+    fn bpf_iter_num_destroy(it: *mut BpfIterNum);
+}
 
 #[map]
 static POLICY_MAP: HashMap<PolicyKey, PolicyValue> =
@@ -38,9 +73,9 @@ pub fn bpf_rbac_bpf(ctx: LsmContext) -> i32 {
 }
 
 fn try_bpf_rbac_bpf(ctx: &LsmContext) -> Result<i32, i64> {
-    let cmd: i32 = unsafe { ctx.arg(0) };
+    let cmd: i32 = ctx.arg(0);
 
-    let kernel: u32 = unsafe { ctx.arg(3) };
+    let kernel: u32 = ctx.arg(3);
     if kernel != 0 {
         return Ok(0);
     }
@@ -74,10 +109,77 @@ fn try_bpf_rbac_bpf(ctx: &LsmContext) -> Result<i32, i64> {
     }
 }
 
+/// Walk the BPF bytecode of a program being loaded and log any
+/// helper or kfunc calls it makes.
+///
+/// Uses the numeric open-coded iterator (`bpf_iter_num_*` kfuncs) to
+/// loop over every instruction without hitting verifier complexity
+/// limits.  Each instruction is read from kernel memory via
+/// `bpf_probe_read_kernel` and checked for `BPF_JMP | BPF_CALL`
+/// opcodes.
+///
+/// # Safety
+///
+/// `prog` must be a valid pointer to a kernel `struct bpf_prog`.
+/// The `len` field (u32 at byte offset 4) and `insnsi` pointer
+/// (at byte offset 48 on 6.x kernels) are read with
+/// `bpf_probe_read_kernel`.
+///
+/// # Arguments
+///
+/// * `ctx` - LSM context, forwarded for logging.
+/// * `prog` - Pointer to the `struct bpf_prog` being loaded.
+unsafe fn walk_bpf_instructions(ctx: &LsmContext, prog: *const u8) {
+    // Read prog->len (instruction count).
+    // offsetof(struct bpf_prog, len) = 4 on current kernels.
+    let insn_cnt: u32 = match bpf_probe_read_kernel(prog.add(4) as *const u32) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    // Read prog->insnsi pointer.
+    // offsetof(struct bpf_prog, insnsi) = 48 on 6.x kernels.
+    let insnsi: *const u8 = match bpf_probe_read_kernel(prog.add(48) as *const *const u8) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+
+    let mut it = core::mem::MaybeUninit::<BpfIterNum>::uninit();
+    bpf_iter_num_new(it.as_mut_ptr(), 0, insn_cnt as i32);
+
+    loop {
+        let idx_ptr = bpf_iter_num_next(it.as_mut_ptr());
+        if idx_ptr.is_null() {
+            break;
+        }
+        let idx = *idx_ptr as u32;
+
+        let insn_ptr = insnsi.add((idx as usize) * core::mem::size_of::<BpfInsn>());
+        let insn_result: Result<BpfInsn, _> = bpf_probe_read_kernel(insn_ptr as *const BpfInsn);
+        let bpf_insn = match insn_result {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+
+        if bpf_insn.code != insn::BPF_JMP_CALL {
+            continue;
+        }
+
+        if bpf_insn.src_reg() == insn::BPF_HELPER_CALL {
+            info!(ctx, "bpf_rbac: prog calls helper id={}", bpf_insn.imm);
+        } else if bpf_insn.src_reg() == insn::BPF_PSEUDO_KFUNC_CALL {
+            info!(ctx, "bpf_rbac: prog calls kfunc id={}", bpf_insn.imm);
+        }
+    }
+
+    bpf_iter_num_destroy(it.as_mut_ptr());
+}
+
 /// LSM hook: security_bpf_prog_load
 ///
 /// Called when a BPF program is being loaded. Checks whether the program type
-/// is allowed for the calling process's user namespace.
+/// is allowed for the calling process's user namespace, and walks the
+/// program's bytecode to log helper/kfunc usage.
 ///
 /// Arguments in context:
 ///   - prog: *const bpf_prog
@@ -93,9 +195,15 @@ pub fn bpf_rbac_prog_load(ctx: LsmContext) -> i32 {
 }
 
 fn try_bpf_rbac_prog_load(ctx: &LsmContext) -> Result<i32, i64> {
-    let kernel: u32 = unsafe { ctx.arg(3) };
+    let kernel: u32 = ctx.arg(3);
     if kernel != 0 {
         return Ok(0);
+    }
+
+    // Walk the program's instructions to log helper/kfunc calls.
+    let prog: *const u8 = ctx.arg(0);
+    if !prog.is_null() {
+        unsafe { walk_bpf_instructions(ctx, prog) };
     }
 
     let userns_id = get_current_userns_id()?;
@@ -114,12 +222,9 @@ fn try_bpf_rbac_prog_load(ctx: &LsmContext) -> Result<i32, i64> {
         return Ok(0);
     }
 
-    // Read prog_type from the bpf_prog struct.
-    // The prog_type field is at a known offset in struct bpf_prog.
-    // This offset depends on kernel version; we use BTF to resolve it.
-    // For now, read from bpf_attr which is the second argument.
+    // Read prog_type from bpf_attr (second argument).
     // attr->prog_type is the first u32 field in the prog_load union member.
-    let attr: *const u32 = unsafe { ctx.arg(1) };
+    let attr: *const u32 = ctx.arg(1);
     if attr.is_null() {
         return Ok(-1);
     }
@@ -155,7 +260,7 @@ pub fn bpf_rbac_map_create(ctx: LsmContext) -> i32 {
 }
 
 fn try_bpf_rbac_map_create(ctx: &LsmContext) -> Result<i32, i64> {
-    let kernel: u32 = unsafe { ctx.arg(3) };
+    let kernel: u32 = ctx.arg(3);
     if kernel != 0 {
         return Ok(0);
     }
@@ -177,7 +282,7 @@ fn try_bpf_rbac_map_create(ctx: &LsmContext) -> Result<i32, i64> {
     }
 
     // Read map_type from bpf_attr (first u32 field in map_create union member)
-    let attr: *const u32 = unsafe { ctx.arg(1) };
+    let attr: *const u32 = ctx.arg(1);
     if attr.is_null() {
         return Ok(-1);
     }

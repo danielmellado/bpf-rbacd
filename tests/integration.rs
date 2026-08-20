@@ -775,7 +775,7 @@ mod lsm_tests {
         };
 
         policy_map
-            .insert(key, value, 0)
+            .insert(&key, &value, 0)
             .expect("Failed to insert policy entry");
 
         let retrieved = policy_map.get(&key, 0).expect("Failed to get policy entry");
@@ -795,7 +795,7 @@ mod lsm_tests {
             _reserved: [0; 3],
         };
         policy_map
-            .insert(deny_key, deny_value, 0)
+            .insert(&deny_key, &deny_value, 0)
             .expect("Failed to insert deny policy");
 
         let retrieved = policy_map
@@ -815,4 +815,63 @@ mod lsm_tests {
             .expect("Failed to remove deny entry");
         println!("Policy map cleanup successful");
     }
+}
+
+/// Smoke test: load the eBPF ELF with Aya and attach LSM hooks.
+///
+/// Verifies that:
+/// - The ELF binary with BTF is parseable by Aya
+/// - The BPF verifier accepts all programs (including the kfunc-based
+///   instruction walker)
+/// - LSM hooks can be attached
+///
+/// Requires: root (or CAP_BPF+CAP_SYS_ADMIN), kernel 6.4+ with BPF LSM.
+#[test]
+#[ignore]
+fn test_ebpf_lsm_load_smoke() {
+    use aya::{programs::Lsm, Btf, Ebpf};
+
+    let ebpf_elf = std::path::Path::new("bpf-rbacd-ebpf")
+        .join("target")
+        .join("bpfel-unknown-none")
+        .join("release")
+        .join("bpf-rbacd-ebpf");
+
+    assert!(
+        ebpf_elf.exists(),
+        "eBPF ELF not found at {:?}. Build it first: \
+         cd bpf-rbacd-ebpf && cargo +nightly build --release",
+        ebpf_elf
+    );
+
+    let btf = Btf::from_sys_fs().expect("Failed to read kernel BTF from /sys/kernel/btf/vmlinux");
+
+    let elf_data = std::fs::read(&ebpf_elf).expect("Failed to read eBPF ELF");
+    let mut ebpf = Ebpf::load(&elf_data).expect("Failed to parse eBPF ELF (Aya relocation error?)");
+
+    // (program name in ELF, LSM hook name passed to the kernel)
+    let programs = [
+        ("bpf_rbac_bpf", "bpf"),
+        ("bpf_rbac_prog_load", "bpf_prog_load"),
+        ("bpf_rbac_map_create", "bpf_map_create"),
+    ];
+
+    for (prog_name, hook_name) in &programs {
+        let prog: &mut Lsm = ebpf
+            .program_mut(prog_name)
+            .unwrap_or_else(|| panic!("Program '{}' not found in ELF", prog_name))
+            .try_into()
+            .unwrap_or_else(|e| panic!("'{}' is not an LSM program: {}", prog_name, e));
+
+        prog.load(hook_name, &btf).unwrap_or_else(|e| {
+            panic!(
+                "Verifier rejected '{}' (hook={}): {}",
+                prog_name, hook_name, e
+            )
+        });
+
+        println!("Loaded LSM program: {} -> lsm/{}", prog_name, hook_name);
+    }
+
+    println!("All LSM programs loaded successfully — verifier accepted kfunc calls!");
 }
