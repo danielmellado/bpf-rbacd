@@ -73,10 +73,10 @@
 //! assert!(policy.is_prog_op_allowed(role, "kprobe", "load"));
 //! assert!(!policy.is_prog_op_allowed(role, "xdp", "load"));
 //!
-//! // Generate bitmaps for the eBPF policy map
-//! let cmd_bitmap = policy.commands_bitmap(role);
-//! let prog_bitmap = policy.prog_types_bitmap(role);
-//! let map_bitmap = policy.map_types_bitmap(role);
+//! // Generate u64 bitmaps for the eBPF policy map
+//! let cmd_bitmap: u64 = policy.commands_bitmap(role);
+//! let prog_bitmap: u64 = policy.prog_types_bitmap(role);
+//! let map_bitmap: u64 = policy.map_types_bitmap(role);
 //! ```
 //!
 //! ## Kernel requirements

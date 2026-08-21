@@ -271,14 +271,20 @@ mod unit_tests {
         let role = policy.roles().get("ebpf").unwrap();
 
         let prog_bitmap = policy.prog_types_bitmap(role);
-        assert!(prog_bitmap & (1 << 2) != 0, "kprobe should be allowed");
-        assert!(prog_bitmap & (1 << 5) != 0, "tracepoint should be allowed");
-        assert!(prog_bitmap & (1 << 6) == 0, "xdp should NOT be allowed");
+        assert!(prog_bitmap & (1u64 << 2) != 0, "kprobe should be allowed");
+        assert!(
+            prog_bitmap & (1u64 << 5) != 0,
+            "tracepoint should be allowed"
+        );
+        assert!(prog_bitmap & (1u64 << 6) == 0, "xdp should NOT be allowed");
 
         let map_bitmap = policy.map_types_bitmap(role);
-        assert!(map_bitmap & (1 << 1) != 0, "hash should be allowed");
-        assert!(map_bitmap & (1 << 2) != 0, "array should be allowed");
-        assert!(map_bitmap & (1 << 14) == 0, "devmap should NOT be allowed");
+        assert!(map_bitmap & (1u64 << 1) != 0, "hash should be allowed");
+        assert!(map_bitmap & (1u64 << 2) != 0, "array should be allowed");
+        assert!(
+            map_bitmap & (1u64 << 14) == 0,
+            "devmap should NOT be allowed"
+        );
     }
 
     #[test]
@@ -453,7 +459,7 @@ mod namespace_tests {
         assert!(data.contains("delegate_maps=0xffffffff"));
         assert!(data.contains("delegate_attachs=0xffffffff"));
 
-        let opts = DelegationOpts::from_bitmaps(0x1F, 0x24, 0x06, 0x00);
+        let opts = DelegationOpts::from_bitmaps(0x1F_u64, 0x24_u64, 0x06_u64, 0x00_u64);
         let data = opts.to_mount_data();
         assert!(data.contains("delegate_cmds=0x1f"));
         assert!(data.contains("delegate_progs=0x24"));
@@ -779,9 +785,9 @@ mod lsm_tests {
             .expect("Failed to insert policy entry");
 
         let retrieved = policy_map.get(&key, 0).expect("Failed to get policy entry");
-        assert_eq!(retrieved.allowed_cmds, 0x1F);
-        assert_eq!(retrieved.allowed_prog_types, 0x24);
-        assert_eq!(retrieved.allowed_map_types, 0x06);
+        assert_eq!(retrieved.allowed_cmds, 0x1F_u64);
+        assert_eq!(retrieved.allowed_prog_types, 0x24_u64);
+        assert_eq!(retrieved.allowed_map_types, 0x06_u64);
         assert_eq!(retrieved.flags, 0);
         println!("Policy map population and retrieval works correctly");
 
