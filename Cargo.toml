@@ -33,7 +33,7 @@ bpf-rbacd-common = { path = "bpf-rbacd-common", features = ["user"] }
 assert_matches = "1.5"
 test-log = { version = "0.2", features = ["log"] }
 env_logger = "0.11"
-aya = "0.14"
+aya = "0.16"
 aya-log = "0.3"
 
 [lib]
